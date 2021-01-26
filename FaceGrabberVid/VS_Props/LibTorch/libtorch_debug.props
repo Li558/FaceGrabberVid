@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros">
+    <LIB_TORCH_DEBUG_HOME>D:\ProgramEnvironments\CPP_LIB\libtorch\debug</LIB_TORCH_DEBUG_HOME>
+  </PropertyGroup>
+  <PropertyGroup>
+    <IncludePath>$(LIB_TORCH_DEBUG_HOME)/include/torch/csrc/api/include;$(LIB_TORCH_DEBUG_HOME)/include;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>
+    <LibraryPath>$(LIB_TORCH_DEBUG_HOME)/lib;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <Link>
+      <AdditionalDependencies>torch_cpu.lib;c10.lib;torch.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy $(LIB_TORCH_DEBUG_HOME)\lib\*.dll $(SolutionDir)$(Platform)\$(Configuration)\ /c /y</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <BuildMacro Include="LIB_TORCH_DEBUG_HOME">
+      <Value>$(LIB_TORCH_DEBUG_HOME)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+  </ItemGroup>
+</Project>
