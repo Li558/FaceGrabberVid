@@ -4,6 +4,9 @@ using namespace std;
 using namespace cv;
 using namespace cv::dnn;
 
+
+
+//判空
 bool FaceGrabber::StarGrab()
 {
 	cap_.open(0);
@@ -12,10 +15,11 @@ bool FaceGrabber::StarGrab()
 		cout << "error cam open failed" << endl;
 		return false;
 	}
+	
 
 
 }
-
+//采用haar特征提取人脸
 bool FaceGrabber::FaceDetectHaar()
 {
 	if (src_.empty())
@@ -44,12 +48,17 @@ bool FaceGrabber::FaceDetectHaar()
 
 	return false;
 }
-
+//读入一帧帧图片
 void FaceGrabber::GetFrame()
 {
-	cap_ >> src_;
-}
 
+		cap_ >> src_;
+		//cv::imshow("原图", src_);
+		
+	
+
+}
+//美颜处理
 void FaceGrabber::FaceBeautify()
 {
 	Mat input = roi_face_all_;
@@ -61,33 +70,36 @@ void FaceGrabber::FaceBeautify()
 	AdjustBrightness(dst_Saturated, dst_brighted);
 	imshow("dst_brighted", dst_brighted);
 }
-
+//显示相机一帧帧图像
 void FaceGrabber::ShowSrc()
 {
 	imshow("src", src_);
 	waitKey(1);
 }
-
+//显示语义分割的图像
 void FaceGrabber::ShowDstTorch()
 {
 	imshow("dst_torched", dst_torch_);
+	
+
 	return;
 }
-
+//显示一张有脸和头发的和一张只有脸的
 void FaceGrabber::ShowROIFace()
 {
 	imshow("roi_face", roi_face_all_);
-	imshow("roi_face_hair_", roi_face_hair_);
+	imshow("roi_face_hair_",roi_face_hair_);
 	imshow("roi_face_only_", roi_face_only_);
 }
-
+//语义分割
 bool FaceGrabber::FaceDetectTorch(const Mat& input)
-{
+{//判空
 	if (input.empty())
 		return false;
 	Mat image_transformed;
 	const int set_size = 224;//网络需要的固定图片长宽大小
 	const int multiple = 127; // 转换的倍数大小
+	//重设尺寸
 	resize(input, image_transformed, Size(set_size, set_size));
 	cvtColor(image_transformed, image_transformed, COLOR_BGR2RGB);
 
@@ -117,66 +129,79 @@ bool FaceGrabber::FaceDetectTorch(const Mat& input)
 
 	return true;
 }
-
+//获得一张有脸和头发的和一张只有脸的 并去除背景
 bool FaceGrabber::GetSegments()
 {
 	if (roi_face_all_.empty() || dst_torch_.empty())
 		return false;
+	//创建一个图像矩阵的矩阵体，之后该图像只有脸
 	roi_face_only_.create(Size(roi_face_all_.cols, roi_face_all_.rows), CV_8UC3);
+	//创建一个图像矩阵的矩阵体，之后该图像只有头发和脸
 	roi_face_hair_.create(Size(roi_face_all_.cols, roi_face_all_.rows), CV_8UC3);
-
+	//设置背景为黑色
 	const Vec3b background = { 0, 0, 0 };
-
+	//循环 遍历每个像素
 	for (int i = 0; i < dst_torch_.rows; ++i)
 	{
 		for (int j = 0; j < dst_torch_.cols; ++j)
 		{
 			auto cur_pixel = dst_torch_.at<uchar>(i, j);
+			//如果监测到头发的颜色，有头及脸的图像不做改动，另一张去除头发保持只有脸
 			if (cur_pixel == TypeIndex::HAIR)
 			{
 				roi_face_only_.at<Vec3b>(i, j) = background;
 				roi_face_hair_.at<Vec3b>(i, j) = roi_face_all_.at<Vec3b>(i, j);
 			}
+			//如果监测到脸的颜色，两张图像都保存脸的部分
 			else if (cur_pixel == TypeIndex::FACE)
 			{
 				roi_face_only_.at<Vec3b>(i, j) = roi_face_all_.at<Vec3b>(i, j);
 				roi_face_hair_.at<Vec3b>(i, j) = roi_face_all_.at<Vec3b>(i, j);
 			}
+			//如果是其他地方，通通变为黑色背景
 			else
+				
 			{
 				roi_face_only_.at<Vec3b>(i, j) = background;
 				roi_face_hair_.at<Vec3b>(i, j) = background;
 			}
 		}
 	}
+	MorphologyEx(roi_face_hair_);
+	Remove_background(roi_face_hair_);
+	Remove_background(roi_face_only_);
+	
 	return true;
 }
-
+//性别识别
 void FaceGrabber::GetGender(const cv::Mat& input)
 {
 	cv::String gender_list[] = { "Male", "Female" };
-
+	//整体像素值减去平均值（mean）通过缩放系数（scalefactor）对图片像素值进行缩放
 	Mat face_blob = blobFromImage(input, 1.0, cv::Size(227, 227), cv::Scalar(78.4263377603, 87.7689143744, 114.895847746), false, false);
 	gender_net_.setInput(face_blob);
 
 	Mat gender_preds = gender_net_.forward();
 	Mat prob_mat = gender_preds.reshape(1, 1);
+	//复制
 	Mat output = src_.clone();
 
 	Point class_number;
 	double class_prob;
+	//寻找矩阵(一维数组当作向量, 用Mat定义) 中最小值和最大值的位置.单通道图像
 	minMaxLoc(prob_mat, NULL, &class_prob, NULL, &class_number);
+
 	int classidx = class_number.x;
 	cv::String gender = gender_list[classidx];
+	//在图像上绘制文字
 	putText(output, cv::format("gender:%s", gender.c_str()), rect_face_.tl(),
 		cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 0, 0), 1, 8);
 	cout << gender << endl;
 	imshow("gender", output);
 }
-
-void FaceGrabber::FaceGrinding(Mat& input, Mat& output)
+//滤波
+void FaceGrabber::FaceGrinding(Mat& input, Mat& output, int value1, int value2)
 {
-	int value1 = 3, value2 = 1;     //磨皮程度与细节程度的确定
 	int dx = value1 * 5;    //双边滤波参数之一  
 	double fc = value1 * 12.5; //双边滤波参数之一  
 	int transparency = 50; //透明度  
@@ -185,16 +210,15 @@ void FaceGrabber::FaceGrinding(Mat& input, Mat& output)
 	bilateralFilter(input, dst, dx, fc, fc);
 	dst = (dst - input + 128);
 	//高斯模糊  
-	GaussianBlur(dst, dst, cv::Size(2 * value2 - 1, 2 * value2 - 1), 0, 0);
+	GaussianBlur(dst, dst, cv::Size(2  - 1, 2  - 1), 0, 0);
 	dst = input + 2 * dst - 255;
 	dst = (input * (100 - transparency) + dst * transparency) / 100;
 	dst.copyTo(input);
 }
-
-void FaceGrabber::AdjustSaturation(cv::Mat& input, cv::Mat& output)
+//调节对比度和亮度
+void FaceGrabber::AdjustSaturation(cv::Mat& input, cv::Mat& output, int saturation, const int max_increment)
 {
-	int saturation = 0;
-	const int max_increment = 200;
+
 	float increment = (saturation - 80) * 1.0 / max_increment;
 
 
@@ -258,14 +282,12 @@ void FaceGrabber::AdjustSaturation(cv::Mat& input, cv::Mat& output)
 		}
 	}
 }
-
-void FaceGrabber::AdjustBrightness(cv::Mat& input, cv::Mat& output)
+//调节色调
+void FaceGrabber::AdjustBrightness(cv::Mat& input, cv::Mat& output, float alpha , float beta)
 {
 	int height = input.rows;//求出src的高
 	int width = input.cols;//求出input的宽
 	output = cv::Mat::zeros(input.size(), input.type());  //这句很重要，创建一个与原图一样大小的空白图片              
-	float alpha = 1.1;//调整对比度为1.5
-	float beta = 40;//调整亮度加50
 	//循环操作，遍历每一列，每一行的元素
 	for (int row = 0; row < height; row++)
 	{
@@ -291,7 +313,7 @@ void FaceGrabber::AdjustBrightness(cv::Mat& input, cv::Mat& output)
 		}
 	}
 }
-
+//得到人脸
 bool FaceGrabber::GetFace()
 {
 	//src判空
@@ -299,7 +321,7 @@ bool FaceGrabber::GetFace()
 	if (src_.empty())
 		return false;
 
-
+	//整体像素值减去平均值（mean）通过缩放系数（scalefactor）对图片像素值进行缩放
 	cv::Mat blob_image = blobFromImage(src_, 1.0,
 		cv::Size(300, 300),
 		cv::Scalar(104.0, 177.0, 123.0), false, false);
@@ -310,6 +332,7 @@ bool FaceGrabber::GetFace()
 	const int x_padding = 40;
 	const int y_padding = 80;
 	cv::Mat detection_mat(detection.size[2], detection.size[3], CV_32F, detection.ptr<float>());
+	//阈值为0.5 超过0.5才会显示
 	float confidence_threshold = 0.5;
 	for (int i = 0; i < detection_mat.rows; i++) {
 		float confidence = detection_mat.at<float>(i, 2);
@@ -323,7 +346,7 @@ bool FaceGrabber::GetFace()
 			rect_face_ = cv::Rect((int)tl_x, (int)tl_y, (int)(br_x - tl_x), (int)(br_y - tl_y));
 			if (rect_face_.area() < 50)
 				return false;
-			if (rect_face_.x > 480 || rect_face_.x < 0 || rect_face_.y > 640 || rect_face_.x < 0)
+			if (rect_face_.x > src_.cols || rect_face_.x < 0 || rect_face_.y > src_.rows || rect_face_.x < 0)
 			{
 				return false;
 			}
@@ -331,20 +354,74 @@ bool FaceGrabber::GetFace()
 			cv::Rect roi;
 			roi.x = max(0, rect_face_.x - x_padding);
 			roi.y = max(0, rect_face_.y - y_padding);
+
 			roi.width = rect_face_.width + 2 * x_padding;
 			if (roi.width + roi.x > src_.cols - 1)
 				roi.width = src_.cols - 1 - roi.x;
+
 			roi.height = rect_face_.height + y_padding;
 			if (roi.height + roi.y > src_.rows - 1)
 				roi.height = src_.rows - 1 - roi.y;
-			roi_face_all_ = src_(roi);
 
-			FaceDetectTorch(roi_face_all_);
+			roi_face_all_ = src_(roi);
 			GetGender(roi_face_all_);
+			FaceBeautify();
+			FaceDetectTorch(roi_face_all_);
 			GetSegments();
 			return true;
 		}
 
 	}
 	return false;
+}
+//去除背景，使背景变透明
+void FaceGrabber::Remove_background(cv::Mat& img)
+{
+	if (img.channels() != 4)
+	{
+		cv::cvtColor(img, img, cv::COLOR_BGR2BGRA);
+
+
+		for (int y = 0; y < img.rows; ++y)
+		{
+			for (int x = 0; x < img.cols; ++x)
+			{
+				cv::Vec4b & pixel = img.at<cv::Vec4b>(y, x);
+				if (pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0)
+				{
+					pixel[0] = 255;
+					pixel[1] = 255;
+					pixel[2] = 255;
+					pixel[3] = 0;
+				}
+
+			}
+		}
+	}
+	else
+	{
+		img = img.clone();
+		for (int y = 0; y < img.rows; ++y)
+		{
+			for (int x = 0; x < img.cols; ++x)
+			{
+				cv::Vec4b & pixel = img.at<cv::Vec4b>(y, x);
+				if (pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0)
+				{
+					pixel[0] = 255;
+					pixel[1] = 255;
+					pixel[2] = 255;
+					pixel[3] = 0;
+				}
+
+			}
+		}
+	}
+}
+//对闭运算  消除黑线
+void FaceGrabber::MorphologyEx(cv::Mat& img)
+{
+	Mat kernel = getStructuringElement(MORPH_RECT, Size(2, 2));
+	morphologyEx(img, img, MORPH_CLOSE, kernel);
+	//medianBlur(img, img, 3);
 }

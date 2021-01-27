@@ -2,7 +2,7 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros">
-    <LIB_TORCH_DEBUG_HOME>D:\ProgramEnvironments\CPP_LIB\libtorch\debug</LIB_TORCH_DEBUG_HOME>
+    <LIB_TORCH_DEBUG_HOME>D:\OPENCV\libtorch\libtorch\debug</LIB_TORCH_DEBUG_HOME>
   </PropertyGroup>
   <PropertyGroup>
     <IncludePath>$(LIB_TORCH_DEBUG_HOME)/include/torch/csrc/api/include;$(LIB_TORCH_DEBUG_HOME)/include;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>

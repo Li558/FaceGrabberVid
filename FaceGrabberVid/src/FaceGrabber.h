@@ -13,6 +13,7 @@ const cv::String genderModel = "Resource_Depo/gender/gender_net.caffemodel";
 class FaceGrabber
 {
 public:
+	//默认构造函数
 	inline FaceGrabber()
 	{
 		//读入各个模型
@@ -41,7 +42,10 @@ public:
 	void ShowSrc();
 	void ShowDstTorch();
 	void ShowROIFace();
+	void Remove_background(cv::Mat& img);
+	void MorphologyEx(cv::Mat& img);
 
+	//存储3个部分颜色的结构体
 	enum TypeIndex
 	{
 		BACKGROUND = 0,
@@ -55,9 +59,16 @@ private:
 	bool GetSegments();
 	void GetGender(const cv::Mat& input);
 
-	void FaceGrinding(cv::Mat& input, cv::Mat& output);//磨皮
-	void AdjustSaturation(cv::Mat& input, cv::Mat& output);
-	void AdjustBrightness(cv::Mat& input, cv::Mat& output);
+	  
+	/*
+	dx ,fc 磨皮程度与细节程度的确定 双边滤波参数
+	transparency 透明度
+	*/
+	void FaceGrinding(cv::Mat& input, cv::Mat& output, int value1 = 3 , int value2 = 1);//磨皮
+	//saturation    max_increment
+	void AdjustSaturation(cv::Mat& input, cv::Mat& output, int saturation = 0, const int max_increment = 200);
+	//alpha 调整对比度				beta 调整亮度
+	void AdjustBrightness(cv::Mat& input, cv::Mat& output, float alpha = 1.1, float beta = 40);
 
 private:
 	//分类器
