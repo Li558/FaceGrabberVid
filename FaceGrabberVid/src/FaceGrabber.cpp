@@ -9,13 +9,13 @@ using namespace cv::dnn;
 //判空
 bool FaceGrabber::StarGrab()
 {
-	cap_.open(0);
+	cap_.open(1);
 	if (!cap_.isOpened())
 	{
 		cout << "error cam open failed" << endl;
 		return false;
 	}
-	
+
 
 
 }
@@ -52,10 +52,10 @@ bool FaceGrabber::FaceDetectHaar()
 void FaceGrabber::GetFrame()
 {
 
-		cap_ >> src_;
-		//cv::imshow("原图", src_);
-		
-	
+	cap_ >> src_;
+	//cv::imshow("原图", src_);
+
+
 
 }
 //美颜处理
@@ -80,7 +80,7 @@ void FaceGrabber::ShowSrc()
 void FaceGrabber::ShowDstTorch()
 {
 	imshow("dst_torched", dst_torch_);
-	
+
 
 	return;
 }
@@ -88,7 +88,7 @@ void FaceGrabber::ShowDstTorch()
 void FaceGrabber::ShowROIFace()
 {
 	imshow("roi_face", roi_face_all_);
-	imshow("roi_face_hair_",roi_face_hair_);
+	imshow("roi_face_hair_", roi_face_hair_);
 	imshow("roi_face_only_", roi_face_only_);
 }
 //语义分割
@@ -160,7 +160,7 @@ bool FaceGrabber::GetSegments()
 			}
 			//如果是其他地方，通通变为黑色背景
 			else
-				
+
 			{
 				roi_face_only_.at<Vec3b>(i, j) = background;
 				roi_face_hair_.at<Vec3b>(i, j) = background;
@@ -170,7 +170,7 @@ bool FaceGrabber::GetSegments()
 	MorphologyEx(roi_face_hair_);
 	Remove_background(roi_face_hair_);
 	Remove_background(roi_face_only_);
-	
+
 	return true;
 }
 //性别识别
@@ -210,7 +210,7 @@ void FaceGrabber::FaceGrinding(Mat& input, Mat& output, int value1, int value2)
 	bilateralFilter(input, dst, dx, fc, fc);
 	dst = (dst - input + 128);
 	//高斯模糊  
-	GaussianBlur(dst, dst, cv::Size(2  - 1, 2  - 1), 0, 0);
+	GaussianBlur(dst, dst, cv::Size(2 - 1, 2 - 1), 0, 0);
 	dst = input + 2 * dst - 255;
 	dst = (input * (100 - transparency) + dst * transparency) / 100;
 	dst.copyTo(input);
@@ -283,7 +283,7 @@ void FaceGrabber::AdjustSaturation(cv::Mat& input, cv::Mat& output, int saturati
 	}
 }
 //调节色调
-void FaceGrabber::AdjustBrightness(cv::Mat& input, cv::Mat& output, float alpha , float beta)
+void FaceGrabber::AdjustBrightness(cv::Mat& input, cv::Mat& output, float alpha, float beta)
 {
 	int height = input.rows;//求出src的高
 	int width = input.cols;//求出input的宽
@@ -386,7 +386,7 @@ void FaceGrabber::Remove_background(cv::Mat& img)
 		{
 			for (int x = 0; x < img.cols; ++x)
 			{
-				cv::Vec4b & pixel = img.at<cv::Vec4b>(y, x);
+				cv::Vec4b& pixel = img.at<cv::Vec4b>(y, x);
 				if (pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0)
 				{
 					pixel[0] = 255;
@@ -405,7 +405,7 @@ void FaceGrabber::Remove_background(cv::Mat& img)
 		{
 			for (int x = 0; x < img.cols; ++x)
 			{
-				cv::Vec4b & pixel = img.at<cv::Vec4b>(y, x);
+				cv::Vec4b& pixel = img.at<cv::Vec4b>(y, x);
 				if (pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0)
 				{
 					pixel[0] = 255;
