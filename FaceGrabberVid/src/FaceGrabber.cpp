@@ -9,7 +9,7 @@ using namespace cv::dnn;
 //判空
 bool FaceGrabber::StarGrab()
 {
-	cap_.open(1);
+	cap_.open(0);
 	if (!cap_.isOpened())
 	{
 		cout << "error cam open failed" << endl;
@@ -59,16 +59,15 @@ void FaceGrabber::GetFrame()
 
 }
 //美颜处理
-void FaceGrabber::FaceBeautify()
+void FaceGrabber::FaceBeautify(Mat& input, Mat& output)
 {
-	Mat input = roi_face_all_;
-	Mat dst_grinded;
+	Mat dst_grinded(input.size(), input.type());
 	FaceGrinding(input, dst_grinded);
 	Mat dst_Saturated(input.size(), input.type());
 	AdjustSaturation(dst_grinded, dst_Saturated);
 	Mat dst_brighted(input.size(), input.type());
 	AdjustBrightness(dst_Saturated, dst_brighted);
-	imshow("dst_brighted", dst_brighted);
+	output = dst_brighted.clone();
 }
 //显示相机一帧帧图像
 void FaceGrabber::ShowSrc()
@@ -176,7 +175,7 @@ bool FaceGrabber::GetSegments()
 //性别识别
 void FaceGrabber::GetGender(const cv::Mat& input)
 {
-	cv::String gender_list[] = { "Male", "Female" };
+	cv::String gender_list[] = { "m", "f" };
 	//整体像素值减去平均值（mean）通过缩放系数（scalefactor）对图片像素值进行缩放
 	Mat face_blob = blobFromImage(input, 1.0, cv::Size(227, 227), cv::Scalar(78.4263377603, 87.7689143744, 114.895847746), false, false);
 	gender_net_.setInput(face_blob);
@@ -196,8 +195,7 @@ void FaceGrabber::GetGender(const cv::Mat& input)
 	//在图像上绘制文字
 	putText(output, cv::format("gender:%s", gender.c_str()), rect_face_.tl(),
 		cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 0, 0), 1, 8);
-	cout << gender << endl;
-	imshow("gender", output);
+	cur_gender_ = gender;
 }
 //滤波
 void FaceGrabber::FaceGrinding(Mat& input, Mat& output, int value1, int value2)
@@ -213,7 +211,7 @@ void FaceGrabber::FaceGrinding(Mat& input, Mat& output, int value1, int value2)
 	GaussianBlur(dst, dst, cv::Size(2 - 1, 2 - 1), 0, 0);
 	dst = input + 2 * dst - 255;
 	dst = (input * (100 - transparency) + dst * transparency) / 100;
-	dst.copyTo(input);
+	dst.copyTo(output);
 }
 //调节对比度和亮度
 void FaceGrabber::AdjustSaturation(cv::Mat& input, cv::Mat& output, int saturation, const int max_increment)
@@ -363,9 +361,9 @@ bool FaceGrabber::GetFace()
 			if (roi.height + roi.y > src_.rows - 1)
 				roi.height = src_.rows - 1 - roi.y;
 
-			roi_face_all_ = src_(roi);
+			roi_face_all_ = src_(roi).clone();
 			GetGender(roi_face_all_);
-			FaceBeautify();
+			FaceBeautify(roi_face_all_, roi_face_all_);
 			FaceDetectTorch(roi_face_all_);
 			GetSegments();
 			return true;
@@ -424,4 +422,29 @@ void FaceGrabber::MorphologyEx(cv::Mat& img)
 	Mat kernel = getStructuringElement(MORPH_RECT, Size(2, 2));
 	morphologyEx(img, img, MORPH_CLOSE, kernel);
 	//medianBlur(img, img, 3);
+}
+
+void FaceGrabber::CleanDisk()
+{
+	const string suffix(".bmp");
+	for (int i = 0; i < 3; ++i)
+	{
+
+		string fi_filename(string("f") + to_string(i) + suffix);
+		string mi_filename(string("m") + to_string(i) + suffix);
+		remove(fi_filename.c_str());
+		remove(mi_filename.c_str());
+
+	}
+}
+
+void FaceGrabber::WritePic2Disk()
+{
+	if (!cur_gender_.empty())
+	{
+		const string suffix(".bmp");
+		imwrite(cur_gender_ + string("0") + suffix, roi_face_all_);
+		imwrite(cur_gender_ + string("1") + suffix, roi_face_hair_);
+		imwrite(cur_gender_ + string("2") + suffix, roi_face_only_);
+	}
 }

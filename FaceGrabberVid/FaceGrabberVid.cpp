@@ -19,16 +19,16 @@ int main()
 	//执行死循环
 	while (true)
 	{
+		fg.CleanDisk();
 		//读入一帧帧图片
 		fg.GetFrame();
 		if (fg.GetFace())
 		{
-			
-			fg.ShowDstTorch();
-			fg.ShowROIFace();
-			
-			if (waitKey(1) == 'q')
-				return 1;
+
+			/*fg.ShowDstTorch();
+			fg.ShowROIFace();*/
+			fg.WritePic2Disk();
+			waitKey();
 		}
 
 	}
