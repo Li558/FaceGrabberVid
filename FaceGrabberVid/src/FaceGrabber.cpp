@@ -86,14 +86,19 @@ bool FaceGrabber::GetFace()
 			roi_face_all_ = src_(roi);
 			//识别性别
 			GetGender(roi_face_all_);
+
+			//美化图片
+			FaceBeautify(roi_face_all_, roi_face_all_);
+
 			//像素语义分割
 			FaceDetectTorch(roi_face_all_);
 			//根据掩膜信息，得到各个部位图
 			GetSegments();
 			//获取肤色平均值
 
-
 			ObjectDetectHaar(roi_face_only_, objects_eyes, 2);
+			if (objects_eyes.empty())
+				return false;
 			skin_color_ = Scalar(162, 179, 207);
 			GetBaldHead(roi_face_only_, objects_eyes);
 
@@ -133,7 +138,6 @@ bool FaceGrabber::ObjectDetectHaar(const Mat& input, vector<Rect>& objects_rects
 		ROI_haar_.width = min(parts[static_cast<int>(i)].width - 20, src_.cols);
 		ROI_haar_.height = min(parts[static_cast<int>(i)].height - 20, src_.rows);
 		cv::rectangle(tmp, ROI_haar_, cv::Scalar(0, 255, 0), 1, 8, 0);
-		roi_face_all_ = src_(ROI_haar_);
 		objects_rects.push_back(ROI_haar_);
 	}
 	imshow("eyes", tmp);
@@ -256,6 +260,7 @@ void FaceGrabber::GetGender(const cv::Mat& input)
 //美颜处理
 void FaceGrabber::FaceBeautify(Mat& input, Mat& output)
 {
+
 
 	Mat dst_grinded;
 	FaceGrinding(input, dst_grinded);
@@ -619,30 +624,41 @@ void FaceGrabber::MorphologyClose(cv::Mat& img, const int& kernel_size)
 	//medianBlur(img, img, 3);
 }
 
+const string path("D:/CPP_Projects/FaceGrabberVid/");
+//const string path("F:/Beauty/Beauty/Assets/Resources/");
 
 void FaceGrabber::CleanDisk()
 {
-	const string suffix(".bmp");
-	for (int i = 0; i < 3; ++i)
-	{
-
-		string fi_filename(string("f") + to_string(i) + suffix);
-		string mi_filename(string("m") + to_string(i) + suffix);
-		remove(fi_filename.c_str());
-		remove(mi_filename.c_str());
-
-	}
+	const string suffix(".png");
+	remove((path + string("head-2") + suffix).c_str());
+	remove((path + string("face-2") + suffix).c_str());
+	remove((path + string("head-1") + suffix).c_str());
 }
+
+
 
 void FaceGrabber::WritePic2Disk()
 {
+
+	RemoveBackground(roi_face_hair_);
+	resize(roi_face_hair_, roi_face_hair_, Size(150, 200), 0.0, 0.0, 0);
+
+	RemoveBackground(bald_head_);
+	resize(bald_head_, bald_head_, Size(128, 168));
+
+	resize(roi_face_all_, roi_face_all_, Size(400, 400), 0.0, 0.0, 0);
+	Mat mask(roi_face_all_.size(), roi_face_all_.type(), Scalar(0, 0, 0, 0));
+	circle(mask, Point(200, 200), 200, Scalar(255, 255, 255, 255), -1);
+	bitwise_and(roi_face_all_, mask, roi_face_all_);
+
 	if (!cur_gender_.empty())
 	{
-		const string suffix(".bmp");
-		imwrite(cur_gender_ + string("0") + suffix, roi_face_all_);
-		imwrite(cur_gender_ + string("1") + suffix, roi_face_hair_);
-		imwrite(cur_gender_ + string("2") + suffix, roi_face_only_);
+		const string suffix(".png");
+		imwrite(path + string("head-2") + suffix, roi_face_hair_);
+		imwrite(path + string("face-2") + suffix, bald_head_);
+		imwrite(path + string("head-1") + suffix, roi_face_all_);
 	}
+}
 
 Scalar FaceGrabber::GetSkinColor(const cv::Mat& input)
 {
