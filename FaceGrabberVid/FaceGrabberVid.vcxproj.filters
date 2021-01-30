@@ -21,6 +21,9 @@
     <ClCompile Include="src\FaceGrabber.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="src\SimpleMath.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\std_includes.h">
@@ -33,6 +36,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="src\torch_lib_includes.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SimpleMath.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

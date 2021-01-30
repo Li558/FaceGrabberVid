@@ -9,10 +9,9 @@ using namespace cv;
 int main()
 {
 	FaceGrabber fg;
-	fg.StarGrab();
 
 	//如果false 退出程序
-	if (false)
+	if (!fg.StarGrab())
 	{
 		return 1;
 	}
@@ -23,10 +22,12 @@ int main()
 		fg.GetFrame();
 		if (fg.GetFace())
 		{
-			
-			fg.ShowDstTorch();
-			fg.ShowROIFace();
-			
+
+			//fg.ShowDstTorch();
+			//fg.ShowROIFace();
+
+
+
 			if (waitKey(1) == 'q')
 				return 1;
 		}
