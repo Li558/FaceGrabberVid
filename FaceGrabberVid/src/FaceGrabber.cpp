@@ -140,7 +140,7 @@ bool FaceGrabber::ObjectDetectHaar(const Mat& input, vector<Rect>& objects_rects
 		cv::rectangle(tmp, ROI_haar_, cv::Scalar(0, 255, 0), 1, 8, 0);
 		objects_rects.push_back(ROI_haar_);
 	}
-	imshow("eyes", tmp);
+	//imshow("eyes", tmp);
 
 	return false;
 }
@@ -348,7 +348,7 @@ void FaceGrabber::FillContour(cv::Mat& input, cv::Mat& output)
 			}
 		}
 	}
-	imshow("output", output);
+	//imshow("output", output);
 
 
 	return;
@@ -441,8 +441,8 @@ void FaceGrabber::GetBaldHead(cv::Mat& input, std::vector<cv::Rect>& eyes)
 		bitwise_and(tmp, mask, bald_head_);
 
 
-		imshow("mask", mask);
-		imshow("bald", bald_head_);
+		//imshow("mask", mask);
+		//imshow("bald", bald_head_);
 
 
 	}
@@ -624,8 +624,8 @@ void FaceGrabber::MorphologyClose(cv::Mat& img, const int& kernel_size)
 	//medianBlur(img, img, 3);
 }
 
-const string path("D:/CPP_Projects/FaceGrabberVid/");
-//const string path("F:/Beauty/Beauty/Assets/Resources/");
+//const string path("D:/CPP_Projects/FaceGrabberVid/");
+const string path("F:/Beauty/Beauty/Assets/Resources/");
 
 void FaceGrabber::CleanDisk()
 {

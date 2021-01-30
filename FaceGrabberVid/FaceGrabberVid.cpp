@@ -27,8 +27,7 @@ int main()
 			/*fg.ShowDstTorch();
 			fg.ShowROIFace();*/
 			fg.WritePic2Disk();
-			waitKey();
-
+			return 1;
 		}
 
 	}
