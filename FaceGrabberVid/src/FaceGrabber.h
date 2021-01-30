@@ -44,6 +44,9 @@ public:
 	void ShowDstTorch();
 	void ShowROIFace();
 
+	void CleanDisk();
+	void WritePic2Disk();
+
 	//存储3个部分颜色的结构体
 	enum TypeIndex
 	{
@@ -68,6 +71,7 @@ private:
 	void RemoveBackground(cv::Mat& img);
 	//总美颜参数
 	void FaceBeautify(cv::Mat& input, cv::Mat& output);
+
 	/*
 	dx ,fc 磨皮程度与细节程度的确定 双边滤波参数
 	transparency 透明度
@@ -104,10 +108,17 @@ private:
 	cv::Mat src_;
 	cv::Mat dst_;
 	cv::Mat dst_torch_;
-	//未经过裁切
-	cv::Mat roi_face_all_;
+
+	//face_beautified
+	cv::Mat face_beautified_;
 	//只有脸
 	cv::Mat roi_face_only_;
+	//person's gender
+	std::string cur_gender_;
+
+
+	//未经过裁切
+	cv::Mat roi_face_all_;
 	//脸加头发
 	cv::Mat roi_face_hair_;
 	//只有头发
@@ -118,10 +129,12 @@ private:
 	//脸部方框
 	cv::Rect rect_face_;
 
+
 	//眼部roi
 	std::vector<cv::Rect> objects_eyes;
 
 
 	//皮肤色彩
 	cv::Scalar skin_color_;
+
 };
