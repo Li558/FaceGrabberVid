@@ -145,10 +145,12 @@
   <ItemGroup>
     <ClCompile Include="FaceGrabberVid.cpp" />
     <ClCompile Include="src\FaceGrabber.cpp" />
+    <ClCompile Include="src\SimpleMath.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\FaceGrabber.h" />
     <ClInclude Include="src\opencv_includes.h" />
+    <ClInclude Include="src\SimpleMath.h" />
     <ClInclude Include="src\std_includes.h" />
     <ClInclude Include="src\torch_lib_includes.h" />
   </ItemGroup>

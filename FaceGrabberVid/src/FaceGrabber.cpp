@@ -6,90 +6,141 @@ using namespace cv::dnn;
 
 
 
-//判空
+//打开相机
 bool FaceGrabber::StarGrab()
 {
-	cap_.open(0);
+
+	cap_.open(0, CAP_DSHOW);
+
 	if (!cap_.isOpened())
 	{
-		cout << "error cam open failed" << endl;
-		return false;
+		cap_.open(1, CAP_DSHOW);
+		if (!cap_.isOpened())
+		{
+			cout << "error cam open failed" << endl;
+			return false;
+		}
 	}
 
-
+	return true;
 
 }
-//采用haar特征提取人脸
-bool FaceGrabber::FaceDetectHaar()
-{
-	if (src_.empty())
-		return false;
-	std::vector<cv::Rect> faces;
-	face_cascade_.detectMultiScale(src_, faces, 1.2, 6, 0, cv::Size(120, 120));
-	if (faces.empty())
-	{
-		cout << "cant detect any faces! " << endl;
-		return false;
-	}
-	for (int i = 0; i < faces.size(); i++)
-	{
-		Rect ROI_haar_;
-		//添加偏置
-		ROI_haar_.x = max(faces[static_cast<int>(i)].x - 10, 0);
-		ROI_haar_.y = max(faces[static_cast<int>(i)].y - 80, 0);
-		ROI_haar_.width = min(faces[static_cast<int>(i)].width + 10, src_.cols);
-		ROI_haar_.height = min(faces[static_cast<int>(i)].height + 80, src_.rows);
-		cv::rectangle(src_, ROI_haar_, cv::Scalar(0, 255, 0), 1, 8, 0);
-		roi_face_all_ = src_(ROI_haar_);
 
-		FaceDetectTorch(roi_face_all_);
-		GetSegments();
-	}
-
-	return false;
-}
 //读入一帧帧图片
 void FaceGrabber::GetFrame()
 {
-
 	cap_ >> src_;
-	//cv::imshow("原图", src_);
-
-
-
 }
-//美颜处理
-void FaceGrabber::FaceBeautify(Mat& input, Mat& output)
+
+
+//得到人脸, 总处理函数
+bool FaceGrabber::GetFace()
 {
-	Mat dst_grinded(input.size(), input.type());
-	FaceGrinding(input, dst_grinded);
-	Mat dst_Saturated(input.size(), input.type());
-	AdjustSaturation(dst_grinded, dst_Saturated);
-	Mat dst_brighted(input.size(), input.type());
-	AdjustBrightness(dst_Saturated, dst_brighted);
-	output = dst_brighted.clone();
-}
-//显示相机一帧帧图像
-void FaceGrabber::ShowSrc()
-{
-	imshow("src", src_);
-	waitKey(1);
-}
-//显示语义分割的图像
-void FaceGrabber::ShowDstTorch()
-{
-	imshow("dst_torched", dst_torch_);
+	//src判空
+	bool face_dectected = false;
+	if (src_.empty())
+		return false;
+
+	//整体像素值减去平均值（mean）通过缩放系数（scalefactor）对图片像素值进行缩放
+	cv::Mat blob_image = blobFromImage(src_, 1.0,
+		cv::Size(300, 300),
+		cv::Scalar(104.0, 177.0, 123.0), false, false);
+
+	face_net_.setInput(blob_image, "data");
+	cv::Mat detection = face_net_.forward("detection_out");
+
+	const int x_padding = 40;
+	const int y_padding = 80;
+	cv::Mat detection_mat(detection.size[2], detection.size[3], CV_32F, detection.ptr<float>());
+	//阈值为0.5 超过0.5才会显示
+	float confidence_threshold = 0.5;
+	for (int i = 0; i < detection_mat.rows; i++) {
+		float confidence = detection_mat.at<float>(i, 2);
+		if (confidence > confidence_threshold) {
+			size_t objIndex = (size_t)(detection_mat.at<float>(i, 1));
+			float tl_x = detection_mat.at<float>(i, 3) * src_.cols;
+			float tl_y = detection_mat.at<float>(i, 4) * src_.rows;
+			float br_x = detection_mat.at<float>(i, 5) * src_.cols;
+			float br_y = detection_mat.at<float>(i, 6) * src_.rows;
+			//原始ROI
+			rect_face_ = cv::Rect((int)tl_x, (int)tl_y, (int)(br_x - tl_x), (int)(br_y - tl_y));
+			if (rect_face_.area() < 50)
+				return false;
+			if (rect_face_.x > src_.cols || rect_face_.x < 0 || rect_face_.y > src_.rows || rect_face_.x < 0)
+			{
+				return false;
+			}
+			//放大后的ROI
+			cv::Rect roi;
+			roi.x = max(0, rect_face_.x - x_padding);
+			roi.y = max(0, rect_face_.y - y_padding);
+
+			roi.width = rect_face_.width + 2 * x_padding;
+			if (roi.width + roi.x > src_.cols - 1)
+				roi.width = src_.cols - 1 - roi.x;
+
+			roi.height = rect_face_.height + y_padding;
+			if (roi.height + roi.y > src_.rows - 1)
+				roi.height = src_.rows - 1 - roi.y;
+
+			roi_face_all_ = src_(roi);
+			//识别性别
+			GetGender(roi_face_all_);
+			//像素语义分割
+			FaceDetectTorch(roi_face_all_);
+			//根据掩膜信息，得到各个部位图
+			GetSegments();
+			//获取肤色平均值
 
 
-	return;
+			ObjectDetectHaar(roi_face_only_, objects_eyes, 2);
+			skin_color_ = Scalar(162, 179, 207);
+			GetBaldHead(roi_face_only_, objects_eyes);
+
+
+			return true;
+		}
+
+	}
+	return false;
 }
-//显示一张有脸和头发的和一张只有脸的
-void FaceGrabber::ShowROIFace()
+
+//采用haar特征提取目标特征位置
+/*
+* input: 输入图像
+* objects_rects：识别出来的目标位置，以方框表示
+* min_target_nums: 最少需要识别出来的特征数量，少于这个数，程序将直接跳出
+*/
+bool FaceGrabber::ObjectDetectHaar(const Mat& input, vector<Rect>& objects_rects, size_t min_target_nums)
 {
-	imshow("roi_face", roi_face_all_);
-	imshow("roi_face_hair_", roi_face_hair_);
-	imshow("roi_face_only_", roi_face_only_);
+	objects_rects.clear();
+	if (input.empty())
+		return false;
+	vector<Rect> parts;
+	haar_detector.detectMultiScale(input, parts, 1.2, 6, 0, cv::Size(30, 30));
+	if (parts.size() != min_target_nums)
+	{
+		cout << "cant detect any objects_rects! " << endl;
+		return false;
+	}
+	Mat tmp = input.clone();
+	for (int i = 0; i < parts.size(); i++)
+	{
+		Rect ROI_haar_;
+		//添加偏置
+		ROI_haar_.x = max(parts[static_cast<int>(i)].x + 10, 0);
+		ROI_haar_.y = max(parts[static_cast<int>(i)].y + 10, 0);
+		ROI_haar_.width = min(parts[static_cast<int>(i)].width - 20, src_.cols);
+		ROI_haar_.height = min(parts[static_cast<int>(i)].height - 20, src_.rows);
+		cv::rectangle(tmp, ROI_haar_, cv::Scalar(0, 255, 0), 1, 8, 0);
+		roi_face_all_ = src_(ROI_haar_);
+		objects_rects.push_back(ROI_haar_);
+	}
+	imshow("eyes", tmp);
+
+	return false;
 }
+
 //语义分割
 bool FaceGrabber::FaceDetectTorch(const Mat& input)
 {//判空
@@ -124,7 +175,7 @@ bool FaceGrabber::FaceDetectTorch(const Mat& input)
 	memcpy((void*)dst_torch_.data, out_tensor.data_ptr(), sizeof(torch::kU8) * out_tensor.numel());
 
 	//resize回原来的大小
-	resize(dst_torch_, dst_torch_, Size(input.cols, input.rows));
+	resize(dst_torch_, dst_torch_, Size(input.cols, input.rows), 0.0, 0.0, INTER_NEAREST);
 
 	return true;
 }
@@ -137,6 +188,8 @@ bool FaceGrabber::GetSegments()
 	roi_face_only_.create(Size(roi_face_all_.cols, roi_face_all_.rows), CV_8UC3);
 	//创建一个图像矩阵的矩阵体，之后该图像只有头发和脸
 	roi_face_hair_.create(Size(roi_face_all_.cols, roi_face_all_.rows), CV_8UC3);
+
+	roi_hair_only_.create(Size(roi_face_all_.cols, roi_face_all_.rows), CV_8UC3);
 	//设置背景为黑色
 	const Vec3b background = { 0, 0, 0 };
 	//循环 遍历每个像素
@@ -150,28 +203,30 @@ bool FaceGrabber::GetSegments()
 			{
 				roi_face_only_.at<Vec3b>(i, j) = background;
 				roi_face_hair_.at<Vec3b>(i, j) = roi_face_all_.at<Vec3b>(i, j);
+				roi_hair_only_.at<Vec3b>(i, j) = Vec3b(178, 178, 158);
 			}
 			//如果监测到脸的颜色，两张图像都保存脸的部分
 			else if (cur_pixel == TypeIndex::FACE)
 			{
 				roi_face_only_.at<Vec3b>(i, j) = roi_face_all_.at<Vec3b>(i, j);
 				roi_face_hair_.at<Vec3b>(i, j) = roi_face_all_.at<Vec3b>(i, j);
+				roi_hair_only_.at<Vec3b>(i, j) = background;
 			}
 			//如果是其他地方，通通变为黑色背景
 			else
-
 			{
 				roi_face_only_.at<Vec3b>(i, j) = background;
 				roi_face_hair_.at<Vec3b>(i, j) = background;
+				roi_hair_only_.at<Vec3b>(i, j) = background;
 			}
 		}
 	}
-	MorphologyEx(roi_face_hair_);
-	Remove_background(roi_face_hair_);
-	Remove_background(roi_face_only_);
+	//MorphologyEx(roi_face_hair_);
+
 
 	return true;
 }
+
 //性别识别
 void FaceGrabber::GetGender(const cv::Mat& input)
 {
@@ -197,6 +252,203 @@ void FaceGrabber::GetGender(const cv::Mat& input)
 		cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 0, 0), 1, 8);
 	cur_gender_ = gender;
 }
+
+//美颜处理
+void FaceGrabber::FaceBeautify(Mat& input, Mat& output)
+{
+
+	Mat dst_grinded;
+	FaceGrinding(input, dst_grinded);
+	Mat dst_Saturated(input.size(), input.type());
+	AdjustSaturation(dst_grinded, dst_Saturated);
+	Mat dst_brighted(input.size(), input.type());
+	AdjustBrightness(dst_Saturated, dst_brighted);
+	output = dst_brighted.clone();
+}
+
+
+
+//填充闭合轮廓，输出为闭合的掩膜
+void FaceGrabber::FillContour(cv::Mat& input, cv::Mat& output)
+{
+	//对轮廓图进行填充
+	if (input.type() != CV_8UC1)
+		return;
+	if (output.empty())
+		output.create(input.size(), input.type());
+
+	Mat tmp = input.clone();
+
+	vector<vector<Point>> contour;
+	findContours(input, contour, RETR_EXTERNAL, CHAIN_APPROX_NONE);
+
+	vector<Point> longest_contour = contour[0];
+	//选最长的contours
+	for (const auto& v : contour)
+	{
+		if (v.size() > longest_contour.size())
+		{
+			longest_contour = v;
+		}
+	}
+	contour = { longest_contour };
+
+	Rect b_rect = boundingRect(longest_contour);
+	b_rect.x = max(0, b_rect.x - 1);
+	b_rect.y = max(0, b_rect.y - 1);
+	b_rect.width += 2;
+	if (b_rect.width + b_rect.x > input.cols)
+		b_rect.width = input.cols - 1 - b_rect.x;
+	if (b_rect.height + b_rect.y > input.rows)
+		b_rect.height = input.rows - 1 - b_rect.y;
+	auto fun_in_rect = [&b_rect](int x, int y)
+	{
+		return (x >= b_rect.x && x <= b_rect.x + b_rect.width && y >= b_rect.y && y <= b_rect.y + b_rect.height);
+	};
+	queue<Point> neighbor_queue;
+	neighbor_queue.emplace(b_rect.x, b_rect.y);
+	tmp.at<uchar>(b_rect.y, b_rect.x) = 128;
+
+	while (!neighbor_queue.empty())
+	{
+		//从队列取出种子点，获取其4邻域坐标点
+		auto seed = neighbor_queue.front();
+		neighbor_queue.pop();
+
+		std::vector<Point> pts;
+		pts.emplace_back(seed.x, (seed.y - 1));
+		pts.emplace_back(seed.x, (seed.y + 1));
+		pts.emplace_back((seed.x - 1), seed.y);
+		pts.emplace_back((seed.x + 1), seed.y);
+
+		for (auto& pt : pts)
+		{
+			if (fun_in_rect(pt.x, pt.y) && tmp.at<uchar>(pt.y, pt.x) == 0)
+			{
+				//将矩形范围内且灰度值为0的可连通坐标点添加到队列
+				neighbor_queue.push(pt);
+				tmp.at<uchar>(pt.y, pt.x) = 128;
+			}
+		}
+
+	}
+
+	for (int i = b_rect.y; i < b_rect.y + b_rect.height; i++)
+	{
+		for (int j = b_rect.x; j < b_rect.x + b_rect.width; j++)
+		{
+			if (tmp.at<uchar>(i, j) == 0)
+			{
+				output.at<uchar>(i, j) = 255;
+			}
+		}
+	}
+	imshow("output", output);
+
+
+	return;
+}
+
+void FaceGrabber::GetBaldHead(cv::Mat& input, std::vector<cv::Rect>& eyes)
+{
+	try
+	{
+
+		if (input.empty() || eyes.empty())
+			return;
+
+		//确定左右眼的中心
+		Point lefteye_center, righteye_center;
+		if (eyes[0].x < eyes[1].x)
+		{
+			lefteye_center = SimpleMath::GetMidpt(eyes[0].tl(), eyes[0].br());
+			righteye_center = SimpleMath::GetMidpt(eyes[1].tl(), eyes[1].br());
+		}
+		else
+		{
+			lefteye_center = SimpleMath::GetMidpt(eyes[1].tl(), eyes[1].br());
+			righteye_center = SimpleMath::GetMidpt(eyes[0].tl(), eyes[0].br());
+		}
+		//生成一幅
+		Mat tmp(input.clone());
+
+		Point2d center = SimpleMath::GetMidpt(lefteye_center, righteye_center);
+		Point2d virtual_top = SimpleMath::GetRotatedVecRad(center, Point2d((double)righteye_center.x, (double)righteye_center.y), -M_PI / 2, 1.2);
+		Point2d virtual_bottom = SimpleMath::GetRotatedVecRad(center, Point2d((double)righteye_center.x, (double)righteye_center.y), M_PI / 2, 1.2);
+		Point2d virtual_left = SimpleMath::GetRotatedVecRad(center, Point2d((double)lefteye_center.x, (double)lefteye_center.y), 0.01, 1.2);
+		Point2d virtual_right = SimpleMath::GetRotatedVecRad(center, Point2d((double)righteye_center.x, (double)righteye_center.y), 0.01, 1.2);
+
+		vector<Point2d> virtual_pts = { virtual_top, virtual_bottom, virtual_left, virtual_right };
+
+		/*circle(tmp, center, 3, Scalar(255, 0, 0), -1);
+		circle(tmp, virtual_top, 3, Scalar(0, 255, 255), -1);
+		circle(tmp, lefteye_center, 3, Scalar(0, 255, 255), -1);
+		circle(tmp, righteye_center, 3, Scalar(0, 255, 255), -1);*/
+
+
+		double short_axis = SimpleMath::GetLineLen(center, virtual_top) * 2.0;
+		double long_axis = SimpleMath::GetLineLen(center, virtual_left) * 2.2;
+
+		vector<Point> ellipes_verti;
+		ellipse2Poly((Point)center, Size(long_axis, short_axis), 0, 180 + 15, 180 + 165, 1, ellipes_verti);
+
+
+		Mat mask(input.size(), CV_8UC1, Scalar(0));
+
+		for (int i = 0; i < ellipes_verti.size() - 1; ++i)
+		{
+			//line(tmp, ellipes_verti[i], ellipes_verti[i + 1], Scalar(123, 45, 78), 2);
+			line(mask, ellipes_verti[i], ellipes_verti[i + 1], Scalar(255), 2);
+		}
+
+		Point2d br_padding = ellipes_verti.front(); br_padding.y += input.rows - br_padding.y - 1;
+		Point2d bl_padding = ellipes_verti.back(); bl_padding.y += input.rows - bl_padding.y - 1;
+
+		/*line(tmp, ellipes_verti.front(), br_padding, Scalar(123, 45, 78), 2);
+		line(tmp, ellipes_verti.back(), bl_padding, Scalar(123, 45, 78), 2);
+		line(tmp, bl_padding, br_padding, Scalar(123, 45, 78), 2);*/
+
+		line(mask, ellipes_verti.front(), br_padding, Scalar(255), 2);
+		line(mask, ellipes_verti.back(), bl_padding, Scalar(255), 2);
+		line(mask, bl_padding, br_padding, Scalar(255), 2);
+
+		//染发
+		for (int x = 0; x < roi_hair_only_.cols; ++x)
+		{
+			for (int y = 0; y < roi_hair_only_.rows; ++y)
+			{
+				Vec3b& pixel_color = roi_hair_only_.at<Vec3b>(y, x);
+				if (pixel_color[0] != 0 && pixel_color[1] != 0 && pixel_color[2] != 0)
+				{
+					pixel_color[0] = skin_color_[0];
+					pixel_color[1] = skin_color_[1];
+					pixel_color[2] = skin_color_[2];
+				}
+			}
+		}
+
+		tmp += roi_hair_only_;
+
+		FillContour(mask, mask);
+
+		//将图片转换为三通道执行与运算
+		cvtColor(mask, mask, COLOR_GRAY2BGR);
+		bitwise_and(tmp, mask, bald_head_);
+
+
+		imshow("mask", mask);
+		imshow("bald", bald_head_);
+
+
+	}
+	catch (...)
+	{
+		//do nothing
+	}
+
+}
+
+
 //滤波
 void FaceGrabber::FaceGrinding(Mat& input, Mat& output, int value1, int value2)
 {
@@ -311,69 +563,12 @@ void FaceGrabber::AdjustBrightness(cv::Mat& input, cv::Mat& output, float alpha,
 		}
 	}
 }
-//得到人脸
-bool FaceGrabber::GetFace()
-{
-	//src判空
-	bool face_dectected = false;
-	if (src_.empty())
-		return false;
 
-	//整体像素值减去平均值（mean）通过缩放系数（scalefactor）对图片像素值进行缩放
-	cv::Mat blob_image = blobFromImage(src_, 1.0,
-		cv::Size(300, 300),
-		cv::Scalar(104.0, 177.0, 123.0), false, false);
 
-	face_net_.setInput(blob_image, "data");
-	cv::Mat detection = face_net_.forward("detection_out");
 
-	const int x_padding = 40;
-	const int y_padding = 80;
-	cv::Mat detection_mat(detection.size[2], detection.size[3], CV_32F, detection.ptr<float>());
-	//阈值为0.5 超过0.5才会显示
-	float confidence_threshold = 0.5;
-	for (int i = 0; i < detection_mat.rows; i++) {
-		float confidence = detection_mat.at<float>(i, 2);
-		if (confidence > confidence_threshold) {
-			size_t objIndex = (size_t)(detection_mat.at<float>(i, 1));
-			float tl_x = detection_mat.at<float>(i, 3) * src_.cols;
-			float tl_y = detection_mat.at<float>(i, 4) * src_.rows;
-			float br_x = detection_mat.at<float>(i, 5) * src_.cols;
-			float br_y = detection_mat.at<float>(i, 6) * src_.rows;
-			//原始ROI
-			rect_face_ = cv::Rect((int)tl_x, (int)tl_y, (int)(br_x - tl_x), (int)(br_y - tl_y));
-			if (rect_face_.area() < 50)
-				return false;
-			if (rect_face_.x > src_.cols || rect_face_.x < 0 || rect_face_.y > src_.rows || rect_face_.x < 0)
-			{
-				return false;
-			}
-			//放大后的ROI
-			cv::Rect roi;
-			roi.x = max(0, rect_face_.x - x_padding);
-			roi.y = max(0, rect_face_.y - y_padding);
 
-			roi.width = rect_face_.width + 2 * x_padding;
-			if (roi.width + roi.x > src_.cols - 1)
-				roi.width = src_.cols - 1 - roi.x;
-
-			roi.height = rect_face_.height + y_padding;
-			if (roi.height + roi.y > src_.rows - 1)
-				roi.height = src_.rows - 1 - roi.y;
-
-			roi_face_all_ = src_(roi).clone();
-			GetGender(roi_face_all_);
-			FaceBeautify(roi_face_all_, roi_face_all_);
-			FaceDetectTorch(roi_face_all_);
-			GetSegments();
-			return true;
-		}
-
-	}
-	return false;
-}
 //去除背景，使背景变透明
-void FaceGrabber::Remove_background(cv::Mat& img)
+void FaceGrabber::RemoveBackground(cv::Mat& img)
 {
 	if (img.channels() != 4)
 	{
@@ -387,9 +582,9 @@ void FaceGrabber::Remove_background(cv::Mat& img)
 				cv::Vec4b& pixel = img.at<cv::Vec4b>(y, x);
 				if (pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0)
 				{
-					pixel[0] = 255;
-					pixel[1] = 255;
-					pixel[2] = 255;
+					pixel[0] = 0;
+					pixel[1] = 0;
+					pixel[2] = 0;
 					pixel[3] = 0;
 				}
 
@@ -406,9 +601,9 @@ void FaceGrabber::Remove_background(cv::Mat& img)
 				cv::Vec4b& pixel = img.at<cv::Vec4b>(y, x);
 				if (pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0)
 				{
-					pixel[0] = 255;
-					pixel[1] = 255;
-					pixel[2] = 255;
+					pixel[0] = 0;
+					pixel[1] = 0;
+					pixel[2] = 0;
 					pixel[3] = 0;
 				}
 
@@ -417,12 +612,13 @@ void FaceGrabber::Remove_background(cv::Mat& img)
 	}
 }
 //对闭运算  消除黑线
-void FaceGrabber::MorphologyEx(cv::Mat& img)
+void FaceGrabber::MorphologyClose(cv::Mat& img, const int& kernel_size)
 {
-	Mat kernel = getStructuringElement(MORPH_RECT, Size(2, 2));
+	Mat kernel = getStructuringElement(MORPH_RECT, Size(kernel_size, kernel_size));
 	morphologyEx(img, img, MORPH_CLOSE, kernel);
 	//medianBlur(img, img, 3);
 }
+
 
 void FaceGrabber::CleanDisk()
 {
@@ -447,4 +643,72 @@ void FaceGrabber::WritePic2Disk()
 		imwrite(cur_gender_ + string("1") + suffix, roi_face_hair_);
 		imwrite(cur_gender_ + string("2") + suffix, roi_face_only_);
 	}
+
+Scalar FaceGrabber::GetSkinColor(const cv::Mat& input)
+{
+	if (input.channels() != 3)
+		return Scalar();
+
+	Mat dst = input.clone();
+
+	for (auto& rect : objects_eyes)
+	{
+		ZoomRect(rect, 10, 10, input.size());
+		rectangle(dst, rect, Scalar(0, 0, 0), -1);
+	}
+	imshow("dst", dst);
+
+	size_t color_r = 0, color_g = 0, color_b = 0, pix_size = 0;
+
+	for (int x = 0; x < dst.cols; ++x)
+	{
+		for (int y = 0; y < dst.rows; ++y)
+		{
+			const Vec3b& pixel_color = dst.at<Vec3b>(y, x);
+			if (pixel_color[0] != 0 && pixel_color[1] != 0 && pixel_color[2] != 0)
+			{
+				color_r += pixel_color[0];
+				color_b += pixel_color[1];
+				color_b += pixel_color[2];
+				++pix_size;
+			}
+		}
+	}
+	return Scalar(color_r / pix_size, color_g / pix_size, color_b / pix_size);
+}
+
+void FaceGrabber::ZoomRect(cv::Rect& rect, const int x, const int y, cv::Size pic_size)
+{
+	rect.x = max(0, rect.x - x);
+	rect.y = max(0, rect.y - y);
+	rect.width = rect.x + 2 * x;
+	if (rect.width > pic_size.width)
+		rect.width = pic_size.width - 1 - rect.x;
+	if (rect.height > pic_size.height)
+		rect.height = pic_size.height - 1 - rect.y;
+}
+
+
+
+//显示相机一帧帧图像
+void FaceGrabber::ShowSrc()
+{
+	imshow("src", src_);
+	waitKey(1);
+}
+//显示语义分割的图像
+void FaceGrabber::ShowDstTorch()
+{
+	imshow("dst_torched", dst_torch_);
+
+
+	return;
+}
+//显示一张有脸和头发的和一张只有脸的
+void FaceGrabber::ShowROIFace()
+{
+	imshow("roi_face", roi_face_all_);
+	imshow("roi_face_hair_", roi_face_hair_);
+	imshow("roi_face_only_", roi_face_only_);
+
 }
