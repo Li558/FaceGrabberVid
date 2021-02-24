@@ -144,10 +144,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="FaceGrabberVid.cpp" />
+    <ClCompile Include="PS_Mixer.cpp" />
     <ClCompile Include="src\FaceGrabber.cpp" />
     <ClCompile Include="src\SimpleMath.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="PS_Mixer.h" />
     <ClInclude Include="src\FaceGrabber.h" />
     <ClInclude Include="src\opencv_includes.h" />
     <ClInclude Include="src\SimpleMath.h" />

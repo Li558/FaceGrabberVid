@@ -95,16 +95,23 @@ bool FaceGrabber::GetFace()
 			FaceDetectTorch(roi_face_all_);
 			//根据掩膜信息，得到各个部位图
 			GetSegments();
-			//获取肤色平均值
 
 			//获取唇部区域
 			GetLip(roi_face_only_);
-
+			//获取输入眼睛位置
 			ObjectDetectHaar(roi_face_only_, objects_eyes, 2);
 			if (objects_eyes.empty())
 				return false;
-			skin_color_ = Scalar(162, 179, 207);
-			GetBaldHead(roi_face_only_, objects_eyes);
+
+			//获取肤色平均值
+			//通过对标准值进行图层叠加完成实验
+
+			Mat mask(roi_face_only_.rows, roi_face_only_.cols, CV_8UC3, BODY_COLOR);
+			Mat dst;
+			ApplyMask(MIX_TYPE::COLOR, roi_face_only_, mask, dst);
+
+			skin_color_ = BODY_COLOR;
+			GetBaldHead(dst, objects_eyes);
 
 
 			return true;
@@ -612,6 +619,14 @@ void FaceGrabber::AdjustBrightness(cv::Mat& input, cv::Mat& output, float alpha,
 			}
 		}
 	}
+}
+
+void FaceGrabber::ApplyMask(const std::string & mask_type, const cv::Mat& input, const cv::Mat& mask, cv::Mat& dst)
+{
+	MixerFactory m_factory;
+	auto mixer = m_factory.GetMixer(mask_type);
+	mixer->Mix(input, mask, dst);
+	imshow("dst", dst);
 }
 
 

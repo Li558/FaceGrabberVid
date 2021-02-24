@@ -2,6 +2,7 @@
 #include "opencv_includes.h"
 #include "torch_lib_includes.h"
 #include "SimpleMath.h"
+#include "../PS_Mixer.h"
 
 const std::string haar_file_name("Resource_Depo/face/haarcascade_eye_tree_eyeglasses.xml");
 const std::string torch_file_name("Resource_Depo/face/Face_sematic_seg_model.pt");
@@ -10,6 +11,7 @@ const cv::String config_text = "Resource_Depo/face/opencv_face_detector.pbtxt";
 const cv::String genderProto = "Resource_Depo/gender/gender_deploy.prototxt";
 const cv::String genderModel = "Resource_Depo/gender/gender_net.caffemodel";
 
+const cv::Scalar BODY_COLOR{143, 172, 229};
 
 class FaceGrabber
 {
@@ -36,7 +38,7 @@ public:
 	//相机控制
 	bool StarGrab();
 	void GetFrame();
-	//特征识别
+	//总特征识别
 	bool GetFace();
 
 	//输出调试结果
@@ -71,7 +73,7 @@ private:
 	//根据torch库的分割效果，对图像进行切割
 	bool GetSegments();
 	//识别性别
-	void GetGender(const cv::Mat& input);
+	void GetGender(const cv::Mat& ipenput);
 
 	/////////////////////////////////////////////////后处理
 	//填充闭合轮廓
@@ -90,7 +92,9 @@ private:
 	void AdjustSaturation(cv::Mat& input, cv::Mat& output, int saturation = 0, const int max_increment = 200);
 	//alpha 调整对比度				beta 调整亮度
 	void AdjustBrightness(cv::Mat& input, cv::Mat& output, float alpha = 1.1, float beta = 40);
-
+	//覆盖图层函数
+	void ApplyMask(const std::string& mask_type, const cv::Mat& input, const cv::Mat& mask, cv::Mat& dst);
+	
 	//补全光头
 	void GetBaldHead(cv::Mat& input, std::vector<cv::Rect>& eyes);
 	//闭操作
