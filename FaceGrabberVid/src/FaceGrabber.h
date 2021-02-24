@@ -2,6 +2,8 @@
 #include "opencv_includes.h"
 #include "torch_lib_includes.h"
 #include "SimpleMath.h"
+#include "dlib_includes.h"
+#include <vector>
 
 const std::string haar_file_name("Resource_Depo/face/haarcascade_eye_tree_eyeglasses.xml");
 const std::string torch_file_name("Resource_Depo/face/Face_sematic_seg_model.pt");
@@ -93,6 +95,9 @@ private:
 	//根据图片size放大rect
 	void ZoomRect(cv::Rect& rect, const int x, const int y, cv::Size pic_size);
 
+	//挖空眼睛和嘴巴
+	void Delect(cv::Mat &input,cv::Mat &output);
+
 
 private:
 	//分类器
@@ -113,6 +118,8 @@ private:
 	cv::Mat face_beautified_;
 	//只有脸
 	cv::Mat roi_face_only_;
+	//只有脸去除眼睛和嘴
+	cv::Mat delect_roi_face_only_;
 	//person's gender
 	std::string cur_gender_;
 
