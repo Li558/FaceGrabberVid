@@ -43,6 +43,8 @@ public:
 	void ShowSrc();
 	void ShowDstTorch();
 	void ShowROIFace();
+	void ShowBaldHead();
+	void ShowDebug();
 
 	void CleanDisk();
 	void WritePic2Disk();
@@ -59,9 +61,16 @@ private:
 	//方法
 
 	//特征识别
+	//哈尔特征识别
 	bool ObjectDetectHaar(const cv::Mat& input, std::vector< cv::Rect >& objects_rects, size_t min_target_nums);
+	//使用torch库对人脸进行深度学习分割
 	bool FaceDetectTorch(const cv::Mat& input);
+	//获得嘴唇区域掩膜, 掩膜为单通道图像
+	bool GetLip(const cv::Mat& input);
+
+	//根据torch库的分割效果，对图像进行切割
 	bool GetSegments();
+	//识别性别
 	void GetGender(const cv::Mat& input);
 
 	/////////////////////////////////////////////////后处理
@@ -123,6 +132,10 @@ private:
 	cv::Mat roi_face_hair_;
 	//只有头发
 	cv::Mat roi_hair_only_;
+	//只有嘴唇
+	cv::Mat roi_lips_only_;
+
+
 	//秃头
 	cv::Mat bald_head_;
 
