@@ -2,7 +2,7 @@
 #include "src/std_includes.h"
 #include "src/opencv_includes.h"
 #include "src/FaceGrabber.h"
-
+#include "src/dlib_includes.h"
 using namespace std;
 using namespace cv;
 
