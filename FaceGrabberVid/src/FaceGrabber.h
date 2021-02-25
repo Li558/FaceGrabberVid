@@ -12,6 +12,7 @@ const cv::String model_bin = "Resource_Depo/face/opencv_face_detector_uint8.pb";
 const cv::String config_text = "Resource_Depo/face/opencv_face_detector.pbtxt";
 const cv::String genderProto = "Resource_Depo/gender/gender_deploy.prototxt";
 const cv::String genderModel = "Resource_Depo/gender/gender_net.caffemodel";
+const cv::String DlibModel = "Resource_Depo/dlib/shape_predictor_68_face_landmarks.dat";
 
 const cv::Scalar BODY_COLOR{143, 172, 229};
 
@@ -34,6 +35,9 @@ public:
 		face_net_.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
 		//性别模型
 		gender_net_ = cv::dnn::readNet(genderModel, genderProto);
+		//五官模型
+		dlib::deserialize(DlibModel) >> pose_model;
+		dlib_detector_ = dlib::get_frontal_face_detector();
 
 	}
 	~FaceGrabber() {}
@@ -41,7 +45,8 @@ public:
 	bool StarGrab();
 	void GetFrame();
 	//总特征识别
-	bool GetFace();
+	bool ProcesseFace();
+
 
 	//输出调试结果
 	void ShowSrc();
@@ -58,7 +63,9 @@ public:
 	{
 		BACKGROUND = 0,
 		FACE = 127,
-		HAIR = 254
+		HAIR = 254,
+		LIPS = 129,
+		EYES = 128
 	};
 
 private:
@@ -67,6 +74,8 @@ private:
 	//特征识别 
 	//哈尔特征识别
 	bool ObjectDetectHaar(const cv::Mat& input, std::vector< cv::Rect >& objects_rects, size_t min_target_nums);
+	//深度学习获取人脸区域
+	bool GetFace();
 	//使用torch库对人脸进行深度学习分割
 	bool FaceDetectTorch(const cv::Mat& input);
 	//获得嘴唇区域掩膜, 掩膜为单通道图像
@@ -79,7 +88,7 @@ private:
 
 	/////////////////////////////////////////////////后处理
 	//填充闭合轮廓
-	void FillContour(cv::Mat& input, cv::Mat& output);
+	void FillContour(cv::Mat& input, cv::Mat& output, const uchar mask_val = 255);
 	//去除背景
 	void RemoveBackground(cv::Mat& img);
 	//总美颜参数
@@ -108,8 +117,8 @@ private:
 	//根据图片size放大rect
 	void ZoomRect(cv::Rect& rect, const int x, const int y, cv::Size pic_size);
 
-	//挖空眼睛和嘴巴
-	void Delect(cv::Mat &input,cv::Mat &output);
+	//获取五官信息
+	void GetFacialFeatures(cv::Mat &input,cv::Mat &output);
 
 
 private:
@@ -120,12 +129,18 @@ private:
 
 	cv::dnn::Net face_net_;
 	cv::dnn::Net gender_net_;
+
+	dlib::shape_predictor pose_model;
+	dlib::frontal_face_detector dlib_detector_;
+
 	//视频控制器
 	cv::VideoCapture cap_;
 	//Mat
 	cv::Mat src_;
 	cv::Mat dst_;
 	cv::Mat dst_torch_;
+	cv::Mat mask_eye_;
+	cv::Mat mask_lip_;
 
 	//face_beautified
 	cv::Mat face_beautified_;
@@ -153,10 +168,8 @@ private:
 	//脸部方框
 	cv::Rect rect_face_;
 
-
 	//眼部roi
 	std::vector<cv::Rect> objects_eyes;
-
 
 	//皮肤色彩
 	cv::Scalar skin_color_;

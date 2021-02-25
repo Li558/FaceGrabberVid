@@ -20,13 +20,13 @@ int main()
 	{
 		//读入一帧帧图片
 		fg.GetFrame();
-		if (fg.GetFace())
+		if (fg.ProcesseFace())
 		{
-
+			
 			/*fg.ShowDstTorch();
 			fg.ShowROIFace();*/
 			fg.ShowBaldHead();
-			fg.ShowDebug();
+			//fg.ShowDebug();
 		} 
 
 	}
