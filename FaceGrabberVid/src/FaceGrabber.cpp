@@ -66,6 +66,7 @@ bool FaceGrabber::GetFace()
 			rect_face_ = cv::Rect((int)tl_x, (int)tl_y, (int)(br_x - tl_x), (int)(br_y - tl_y));
 			if (rect_face_.area() < 50)
 				return false;
+			//由于有时候会产生十分奇怪的坐标，故对坐标进行规范化
 			if (rect_face_.x > src_.cols || rect_face_.x < 0 || rect_face_.y > src_.rows || rect_face_.x < 0)
 			{
 				return false;
@@ -79,7 +80,7 @@ bool FaceGrabber::GetFace()
 			if (roi.width + roi.x > src_.cols - 1)
 				roi.width = src_.cols - 1 - roi.x;
 
-			roi.height = rect_face_.height + y_padding;
+			roi.height = rect_face_.height + 2 * y_padding;
 			if (roi.height + roi.y > src_.rows - 1)
 				roi.height = src_.rows - 1 - roi.y;
 
@@ -95,15 +96,24 @@ bool FaceGrabber::GetFace()
 			//根据掩膜信息，得到各个部位图
 			GetSegments();
 
+
 			
 			//获得去除嘴巴和眼睛的图
 			Delect(roi_face_only_, delect_roi_face_only_);
-			//获取肤色平均值
+			
 			ObjectDetectHaar(roi_face_only_, objects_eyes, 2);
 			if (objects_eyes.empty())
 				return false;
-			skin_color_ = Scalar(162, 179, 207);
-			GetBaldHead(roi_face_only_, objects_eyes);
+
+			//获取肤色平均值
+			//通过对标准值进行图层叠加完成实验
+
+			Mat mask(roi_face_only_.rows, roi_face_only_.cols, CV_8UC3, BODY_COLOR);
+			Mat dst;
+			ApplyMask(MIX_TYPE::COLOR, roi_face_only_, mask, dst);
+
+			skin_color_ = BODY_COLOR;
+			GetBaldHead(dst, objects_eyes);
 
 
 			return true;
@@ -186,6 +196,47 @@ bool FaceGrabber::FaceDetectTorch(const Mat& input)
 
 	return true;
 }
+bool FaceGrabber::GetLip(const cv::Mat & input)
+{
+	if (roi_face_only_.empty())
+	{
+		cout << "error in GetLip: roi_face_only empty" << endl;
+		return false;
+	}
+	roi_lips_only_.create(Size(input.cols, input.rows), CV_8UC1);
+	for (int y = 0; y < input.rows; ++y)
+	{
+		for (int x = 0; x < input.cols; ++x)
+		{
+			const Vec3b& origin_pixel = input.at<Vec3b>(y, x);
+			//转换为YIQ空间
+			const auto& b = (double)origin_pixel[0], g = (double)origin_pixel[1], r = (double)origin_pixel[2];
+			const auto  Y = 0.299 * r + 0.587 * g + 0.114 * b;
+			const auto  I = 0.596 * r - 0.275 * g - 0.321 * b;
+			const auto  Q = 0.212 * r - 0.523 * g + 0.311 * b;
+			//进行阈值判断
+			if ((Y >= 80 && Y <= 220 && I >= 12 && I <= 78 && Q >= 7 && Q <= 25))
+			{
+				roi_lips_only_.at<uchar>(y, x) = 255;
+			}
+			else
+			{
+				roi_lips_only_.at<uchar>(y, x) = 0;
+			}
+		}
+	}
+	Mat dst;
+	//对图像进行闭操作
+	Mat element = getStructuringElement(MORPH_RECT, Size(10, 15));
+	//闭操作
+	morphologyEx(roi_lips_only_, roi_lips_only_, MORPH_CLOSE, element);
+
+	cvtColor(roi_lips_only_, dst, COLOR_GRAY2BGR);
+
+	bitwise_and(dst, roi_face_only_, dst);
+	imshow("dst", dst);
+
+}
 //获得一张有脸和头发的和一张只有脸的 并去除背景
 bool FaceGrabber::GetSegments()
 {
@@ -195,7 +246,7 @@ bool FaceGrabber::GetSegments()
 	roi_face_only_.create(Size(roi_face_all_.cols, roi_face_all_.rows), CV_8UC3);
 	//创建一个图像矩阵的矩阵体，之后该图像只有头发和脸
 	roi_face_hair_.create(Size(roi_face_all_.cols, roi_face_all_.rows), CV_8UC3);
-
+	//创建一个图像，之后该图像只有头发
 	roi_hair_only_.create(Size(roi_face_all_.cols, roi_face_all_.rows), CV_8UC3);
 	//设置背景为黑色
 	const Vec3b background = { 0, 0, 0 };
@@ -500,9 +551,9 @@ void FaceGrabber::AdjustSaturation(cv::Mat& input, cv::Mat& output, int saturati
 
 			if (delta == 0)		 // 差为 0 不做操作，保存原像素点
 			{
-				output.at<Vec3b>(row, col)[0] = new_b;
-				output.at<Vec3b>(row, col)[1] = new_g;
-				output.at<Vec3b>(row, col)[2] = new_r;
+				output.at<Vec3b>(row, col)[0] = b;
+				output.at<Vec3b>(row, col)[1] = g;
+				output.at<Vec3b>(row, col)[2] = r;
 				continue;
 			}
 
@@ -570,6 +621,14 @@ void FaceGrabber::AdjustBrightness(cv::Mat& input, cv::Mat& output, float alpha,
 			}
 		}
 	}
+}
+
+void FaceGrabber::ApplyMask(const std::string & mask_type, const cv::Mat& input, const cv::Mat& mask, cv::Mat& dst)
+{
+	MixerFactory m_factory;
+	auto mixer = m_factory.GetMixer(mask_type);
+	mixer->Mix(input, mask, dst);
+	imshow("dst", dst);
 }
 
 
@@ -732,8 +791,6 @@ void FaceGrabber::ShowROIFace()
 
 }
 
-
-
 //挖空眼睛和嘴巴
 void FaceGrabber::Delect(cv::Mat &input, cv::Mat &output)
 {
@@ -873,4 +930,14 @@ void FaceGrabber::Delect(cv::Mat &input, cv::Mat &output)
 	cv::imshow("去除眼睛和嘴巴的图", output);
 
 
+void FaceGrabber::ShowBaldHead()
+{
+	imshow("bald_head", bald_head_);
+	waitKey(1);
+}
+
+void FaceGrabber::ShowDebug()
+{
+	imshow("lips", roi_lips_only_);
+	waitKey(1);
 }

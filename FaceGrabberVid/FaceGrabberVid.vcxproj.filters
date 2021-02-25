@@ -24,6 +24,9 @@
     <ClCompile Include="src\SimpleMath.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="PS_Mixer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\std_includes.h">
@@ -41,7 +44,10 @@
     <ClInclude Include="src\SimpleMath.h">
       <Filter>头文件</Filter>
     </ClInclude>
+
     <ClInclude Include="dlib_includes.h">
+    <ClInclude Include="PS_Mixer.h">
+
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

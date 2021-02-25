@@ -18,7 +18,6 @@ int main()
 	//执行死循环
 	while (true)
 	{
-		fg.CleanDisk();
 		//读入一帧帧图片
 		fg.GetFrame();
 		if (fg.GetFace())
@@ -26,9 +25,9 @@ int main()
 
 			/*fg.ShowDstTorch();
 			fg.ShowROIFace();*/
-			fg.WritePic2Disk();
-			return 1;
-		}
+			fg.ShowBaldHead();
+			fg.ShowDebug();
+		} 
 
 	}
 
