@@ -626,6 +626,9 @@ void FaceGrabber::ApplyMask(const std::string & mask_type, const cv::Mat& input,
 	MixerFactory m_factory;
 	auto mixer = m_factory.GetMixer(mask_type);
 	mixer->Mix(input, mask, dst);
+
+	addWeighted(roi_face_only_, 0.3, dst, 0.6, 0, dst);
+
 	imshow("dst", dst);
 }
 
