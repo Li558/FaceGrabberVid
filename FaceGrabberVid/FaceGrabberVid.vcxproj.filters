@@ -44,7 +44,10 @@
     <ClInclude Include="src\SimpleMath.h">
       <Filter>头文件</Filter>
     </ClInclude>
+
+    <ClInclude Include="dlib_includes.h">
     <ClInclude Include="PS_Mixer.h">
+
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

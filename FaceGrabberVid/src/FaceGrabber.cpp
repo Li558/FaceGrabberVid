@@ -3,7 +3,7 @@
 using namespace std;
 using namespace cv;
 using namespace cv::dnn;
-
+using namespace dlib;
 
 
 //打开相机
@@ -96,9 +96,11 @@ bool FaceGrabber::GetFace()
 			//根据掩膜信息，得到各个部位图
 			GetSegments();
 
-			//获取唇部区域
-			GetLip(roi_face_only_);
-			//获取输入眼睛位置
+
+			
+			//获得去除嘴巴和眼睛的图
+			Delect(roi_face_only_, delect_roi_face_only_);
+			
 			ObjectDetectHaar(roi_face_only_, objects_eyes, 2);
 			if (objects_eyes.empty())
 				return false;
@@ -127,12 +129,12 @@ bool FaceGrabber::GetFace()
 * objects_rects：识别出来的目标位置，以方框表示
 * min_target_nums: 最少需要识别出来的特征数量，少于这个数，程序将直接跳出
 */
-bool FaceGrabber::ObjectDetectHaar(const Mat& input, vector<Rect>& objects_rects, size_t min_target_nums)
+bool FaceGrabber::ObjectDetectHaar(const Mat& input, std::vector<Rect>& objects_rects, size_t min_target_nums)
 {
 	objects_rects.clear();
 	if (input.empty())
 		return false;
-	vector<Rect> parts;
+	std::vector<Rect> parts;
 	haar_detector.detectMultiScale(input, parts, 1.2, 6, 0, cv::Size(30, 30));
 	if (parts.size() != min_target_nums)
 	{
@@ -336,10 +338,10 @@ void FaceGrabber::FillContour(cv::Mat& input, cv::Mat& output)
 
 	Mat tmp = input.clone();
 
-	vector<vector<Point>> contour;
+	std::vector<std::vector<Point>> contour;
 	findContours(input, contour, RETR_EXTERNAL, CHAIN_APPROX_NONE);
 
-	vector<Point> longest_contour = contour[0];
+	std::vector<Point> longest_contour = contour[0];
 	//选最长的contours
 	for (const auto& v : contour)
 	{
@@ -362,7 +364,7 @@ void FaceGrabber::FillContour(cv::Mat& input, cv::Mat& output)
 	{
 		return (x >= b_rect.x && x <= b_rect.x + b_rect.width && y >= b_rect.y && y <= b_rect.y + b_rect.height);
 	};
-	queue<Point> neighbor_queue;
+	std::queue<Point> neighbor_queue;
 	neighbor_queue.emplace(b_rect.x, b_rect.y);
 	tmp.at<uchar>(b_rect.y, b_rect.x) = 128;
 
@@ -435,7 +437,7 @@ void FaceGrabber::GetBaldHead(cv::Mat& input, std::vector<cv::Rect>& eyes)
 		Point2d virtual_left = SimpleMath::GetRotatedVecRad(center, Point2d((double)lefteye_center.x, (double)lefteye_center.y), 0.01, 1.2);
 		Point2d virtual_right = SimpleMath::GetRotatedVecRad(center, Point2d((double)righteye_center.x, (double)righteye_center.y), 0.01, 1.2);
 
-		vector<Point2d> virtual_pts = { virtual_top, virtual_bottom, virtual_left, virtual_right };
+		std::vector<Point2d> virtual_pts = { virtual_top, virtual_bottom, virtual_left, virtual_right };
 
 		/*circle(tmp, center, 3, Scalar(255, 0, 0), -1);
 		circle(tmp, virtual_top, 3, Scalar(0, 255, 255), -1);
@@ -446,7 +448,7 @@ void FaceGrabber::GetBaldHead(cv::Mat& input, std::vector<cv::Rect>& eyes)
 		double short_axis = SimpleMath::GetLineLen(center, virtual_top) * 2.0;
 		double long_axis = SimpleMath::GetLineLen(center, virtual_left) * 2.2;
 
-		vector<Point> ellipes_verti;
+		std::vector<Point> ellipes_verti;
 		ellipse2Poly((Point)center, Size(long_axis, short_axis), 0, 180 + 15, 180 + 165, 1, ellipes_verti);
 
 
@@ -455,7 +457,7 @@ void FaceGrabber::GetBaldHead(cv::Mat& input, std::vector<cv::Rect>& eyes)
 		for (int i = 0; i < ellipes_verti.size() - 1; ++i)
 		{
 			//line(tmp, ellipes_verti[i], ellipes_verti[i + 1], Scalar(123, 45, 78), 2);
-			line(mask, ellipes_verti[i], ellipes_verti[i + 1], Scalar(255), 2);
+			cv::line(mask, ellipes_verti[i], ellipes_verti[i + 1], Scalar(255), 2);
 		}
 
 		Point2d br_padding = ellipes_verti.front(); br_padding.y += input.rows - br_padding.y - 1;
@@ -465,9 +467,9 @@ void FaceGrabber::GetBaldHead(cv::Mat& input, std::vector<cv::Rect>& eyes)
 		line(tmp, ellipes_verti.back(), bl_padding, Scalar(123, 45, 78), 2);
 		line(tmp, bl_padding, br_padding, Scalar(123, 45, 78), 2);*/
 
-		line(mask, ellipes_verti.front(), br_padding, Scalar(255), 2);
-		line(mask, ellipes_verti.back(), bl_padding, Scalar(255), 2);
-		line(mask, bl_padding, br_padding, Scalar(255), 2);
+		cv::line(mask, ellipes_verti.front(), br_padding, Scalar(255), 2);
+		cv::line(mask, ellipes_verti.back(), bl_padding, Scalar(255), 2);
+		cv::line(mask, bl_padding, br_padding, Scalar(255), 2);
 
 		//染发
 		for (int x = 0; x < roi_hair_only_.cols; ++x)
@@ -730,7 +732,7 @@ Scalar FaceGrabber::GetSkinColor(const cv::Mat& input)
 	for (auto& rect : objects_eyes)
 	{
 		ZoomRect(rect, 10, 10, input.size());
-		rectangle(dst, rect, Scalar(0, 0, 0), -1);
+		cv::rectangle(dst, rect, Scalar(0, 0, 0), -1);
 	}
 	imshow("dst", dst);
 
@@ -788,6 +790,145 @@ void FaceGrabber::ShowROIFace()
 	imshow("roi_face_only_", roi_face_only_);
 
 }
+
+//挖空眼睛和嘴巴
+void FaceGrabber::Delect(cv::Mat &input, cv::Mat &output)
+{
+	cv::Mat img = input.clone();
+	frontal_face_detector detector = get_frontal_face_detector();
+	shape_predictor pose_model;
+	deserialize("Resource_Depo/dlib/shape_predictor_68_face_landmarks.dat") >> pose_model;
+
+	// Grab and process frames until the main window is closed by the user.
+	// Grab a frame
+	cv_image<bgr_pixel> cimg(input);
+	// Detect faces 
+	std::vector<dlib::rectangle> faces = detector(cimg);
+	// Find the pose of each face.
+	std::vector<full_object_detection> shapes;
+	for (unsigned long i = 0; i < faces.size(); ++i)
+	{
+		shapes.push_back(pose_model(cimg, faces[i]));
+	}
+	if (!shapes.empty())
+	{
+
+		//添加内容：连接两个点
+		for (int i = 36; i < 41; i++)
+		{
+			cv::line(input, cvPoint(shapes[0].part(i).x(), shapes[0].part(i).y()), cvPoint(shapes[0].part(i + 1).x(), shapes[0].part(i + 1).y()), cv::Scalar(255, 255, 255), 1);
+
+		}
+		cv::line(input, cvPoint(shapes[0].part(36).x(), shapes[0].part(36).y()), cvPoint(shapes[0].part(41).x(), shapes[0].part(41).y()), cv::Scalar(255, 255, 255), 1);
+		for (int i = 42; i < 47; i++)
+		{
+			//最后面的"-20"的作用是要把纵向图像拉长
+			cv::line(input, cvPoint(shapes[0].part(i).x(), shapes[0].part(i).y()), cvPoint(shapes[0].part(i + 1).x(), shapes[0].part(i + 1).y()), cv::Scalar(255, 255, 255), 1);
+		}
+		cv::line(input, cvPoint(shapes[0].part(42).x(), shapes[0].part(42).y()), cvPoint(shapes[0].part(47).x(), shapes[0].part(47).y()), cv::Scalar(255, 255, 255), 1);
+
+		for (int i = 48; i < 60; i++)
+		{
+			//最后面的"-20"的作用是要把纵向图像拉长
+			cv::line(input, cvPoint(shapes[0].part(i).x(), shapes[0].part(i).y()), cvPoint(shapes[0].part(i + 1).x(), shapes[0].part(i + 1).y()), cv::Scalar(255, 255, 255), 1);
+		}
+		cv::line(input, cvPoint(shapes[0].part(48).x(), shapes[0].part(48).y()), cvPoint(shapes[0].part(60).x(), shapes[0].part(60).y()), cv::Scalar(255, 255, 255), 1);
+
+
+	}
+
+
+	//cv::imshow("Dlib特征点", input);
+
+
+	cv::Mat M_mask = input.clone();
+	cv::Mat black = cv::Mat::zeros(M_mask.size(), M_mask.type());
+
+	if (!shapes.empty())
+	{
+
+		//添加内容：连接两个点
+		for (int i = 36; i < 41; i++)
+		{
+			cv::line(black, cvPoint(shapes[0].part(i).x(), shapes[0].part(i).y()), cvPoint(shapes[0].part(i + 1).x(), shapes[0].part(i + 1).y()), cv::Scalar(255, 255, 255), 1);
+
+		}
+		cv::line(black, cvPoint(shapes[0].part(36).x(), shapes[0].part(36).y()), cvPoint(shapes[0].part(41).x(), shapes[0].part(41).y()), cv::Scalar(255, 255, 255), 1);
+		for (int i = 42; i < 47; i++)
+		{
+
+			cv::line(black, cvPoint(shapes[0].part(i).x(), shapes[0].part(i).y()), cvPoint(shapes[0].part(i + 1).x(), shapes[0].part(i + 1).y()), cv::Scalar(255, 255, 255), 1);
+		}
+		cv::line(black, cvPoint(shapes[0].part(42).x(), shapes[0].part(42).y()), cvPoint(shapes[0].part(47).x(), shapes[0].part(47).y()), cv::Scalar(255, 255, 255), 1);
+
+		for (int i = 48; i < 60; i++)
+		{
+
+			cv::line(black, cvPoint(shapes[0].part(i).x(), shapes[0].part(i).y()), cvPoint(shapes[0].part(i + 1).x(), shapes[0].part(i + 1).y()), cv::Scalar(255, 255, 255), 1);
+		}
+		cv::line(black, cvPoint(shapes[0].part(48).x(), shapes[0].part(48).y()), cvPoint(shapes[0].part(60).x(), shapes[0].part(60).y()), cv::Scalar(255, 255, 255), 1);
+
+
+	}
+	//cv::imshow("掩版的图像black", black);
+
+	cv::floodFill(
+		black,
+		cvPoint(shapes[0].part(30).x(), shapes[0].part(30).y()),
+		CV_RGB(255, 255, 255),
+		0,
+		cvScalar(20, 30, 40, 0),
+		cvScalar(20, 30, 40, 0)
+	);
+	//cv::imshow("区域设置成白色", input);
+
+	cv::Mat result;
+	cv::bitwise_and(img, black, result);
+
+	//cv::imshow("与运算", result);
+
+	if (result.channels() != 4)
+	{
+		cv::cvtColor(result, output, cv::COLOR_BGR2BGRA);
+
+
+		for (int y = 0; y < output.rows; ++y)
+		{
+			for (int x = 0; x < output.cols; ++x)
+			{
+				cv::Vec4b & pixel = output.at<cv::Vec4b>(y, x);
+				if (pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0)
+				{
+					pixel[0] = 255;
+					pixel[1] = 255;
+					pixel[2] = 255;
+					pixel[3] = 0;
+				}
+
+			}
+		}
+	}
+	else
+	{
+		output = result.clone();
+		for (int y = 0; y < output.rows; ++y)
+		{
+			for (int x = 0; x < output.cols; ++x)
+			{
+				cv::Vec4b & pixel = output.at<cv::Vec4b>(y, x);
+				if (pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0)
+				{
+					pixel[0] = 255;
+					pixel[1] = 255;
+					pixel[2] = 255;
+					pixel[3] = 0;
+				}
+
+			}
+		}
+	}
+	cv::imshow("去除眼睛和嘴巴的图", output);
+
 
 void FaceGrabber::ShowBaldHead()
 {
